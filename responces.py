@@ -84,12 +84,12 @@ def move_piece(game_data,game_name, p_message):
 
     if board.is_checkmate():
         os.remove(f"games/{game_name}.chess")
-        return ("image_msg",f"**CHECKMATE** {user_cache[game_data[4]]} won, well done!!",render_board(board,f"{game_name}",move))
+        return ("image_msg",f"**CHECKMATE** {user_cache[game_data[4]]} won, well done!!, type `chester close` to also close the thread. (server owners will thank you)",render_board(board,f"{game_name}",move))
     elif board.is_check():
         return ("image_msg","**CHECK**",render_board(board,f"{game_name}",move))
     elif board.is_stalemate():
         os.remove(f"games/{game_name}.chess")
-        return ("image_msg","**STALEMATE**",render_board(board,f"{game_name}",move))
+        return ("image_msg","**STALEMATE**, type `chester close` to also close the thread. (server owners will thank you)",render_board(board,f"{game_name}",move))
 
     if test.promotion:
         return ("image_msg","**PROMOTION**", render_board(board,f"{game_name}",move))
@@ -111,7 +111,7 @@ def handle_responces(message, user_message):
         elif os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.temp"):
             return "Looks like someone else has tried to start a game already, you can join their game with `chester join`"
         else:
-            return ("create_thread",f"{user_cache[message.author.id]} started a game, player 2 type `chester join` to join the game.")
+            return ("create_thread",f"{user_cache[message.author.id]} started a game, player 2 type `chester join` in the thread to join the game.")
 
     # join game
     if p_message.startswith("join"):
@@ -122,7 +122,7 @@ def handle_responces(message, user_message):
                 user_white_id = int.from_bytes(f.read(8), "little")
                 save_game(f"{message.guild.id}-{message.channel.id}", user_white_id, message.author.id)
             os.remove(f"games/{message.guild.id}-{message.channel.id}.temp")
-            return ("image_msg",f"{user_cache[message.author.id]} joined {user_cache[user_white_id]}s' game. {user_cache[user_white_id]} will go first as lights",render_board(chess.Board(),f"{message.guild.id}-{message.channel.id}"))
+            return ("edit_thread",f"{user_cache[message.author.id]} joined {user_cache[user_white_id]}s' game. {user_cache[user_white_id]} will go first as lights",f"chess game {user_cache[user_white_id]} vs {user_cache[message.author.id]}",render_board(chess.Board(),f"{message.guild.id}-{message.channel.id}"))
         else:
             return "doesn't looks like there is any game to join just now, if you want to start a game you can type `chester start`"
 
@@ -133,9 +133,9 @@ def handle_responces(message, user_message):
             if not valid:
                 return "you cannot end someone elses game, that's a bit mean."
             os.remove(f"games/{message.guild.id}-{message.channel.id}.chess")
-            return f"{user_cache[message.author.id]} ended the game"
+            return f"{user_cache[message.author.id]} ended the game, type `chester close` to also close the thread. (server owners will thank you)"
         elif os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.temp"):
-            return "you cannot end what has not yet begun"
+            return "the game hasnt even begun yet, but if you wish to close the thread type `chester close`"
         else:
             return "you cannot end what has not yet begun"
 
@@ -179,12 +179,27 @@ def handle_responces(message, user_message):
             if not valid:
                 return "you cannot resign from a game you're not part of"
             os.remove(f"games/{message.guild.id}-{message.channel.id}.chess")
-            return f"{user_cache[message.author.id]} resigned, {user_cache[user_white] if message.author.id == user_black else user_cache[user_black]} won!!"
+            return f"{user_cache[message.author.id]} resigned, {user_cache[user_white] if message.author.id == user_black else user_cache[user_black]} won!!, type `chester close` to also close the thread. (server owners will thank you)"
             return f"{user_cache[message.author.id]} ended the game"
         elif os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.temp"):
             return "you cannot resign from nothing"
         else:
             return "you cannot resign from nothing"
+    
+    # close thread
+    if p_message.startswith("close"):
+        if os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
+            with open(f"games/{message.guild.id}-{message.channel.id}.chess","rb") as f:
+                user_white = int.from_bytes(f.read(8), "little")
+                user_black = int.from_bytes(f.read(8), "little")
+            valid, responce = validate_user(message)
+            if not valid:
+                return "you cannot close this thread"
+            return "you cannot close thread whilst game is active type `chester end` to finnish the current game"
+        elif os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.temp"):
+            return ("close_thread",None)
+        else:
+            return ("close_thread", None)
 
 
     if p_message.startswith("help"):
@@ -206,7 +221,10 @@ def handle_responces(message, user_message):
         **start**: Start a new game
         **join**: Join a game
         **end**: End a running game
-        **load**: Load a game state -> `chester load 4r3/1pR4p/pk5N/4p3/P3b3/8/2P5/1K6 b - a3 0 32`"""
+        **load**: Load a game state -> `chester load 4r3/1pR4p/pk5N/4p3/P3b3/8/2P5/1K6 b - a3 0 32`
+        **show**: Show the current state of the game
+        **close**: close the thread (server owners will thank you)"""
+        
 
 
     unknown_command_responce = random.choice(["I'm not sure what you meant sorry", "That command isn't in my database", "You must know something I dont because I've no idea what that means", "Computer says no", "Hmmm???", "Ehm, say what now?", "You know im chester right? I dunno who you are tryna make me do that"])
