@@ -101,7 +101,7 @@ def handle_responces(message, user_message):
     if message.author.id not in user_cache:
         user_cache[message.author.id] = f"**{message.author.name}**"
     # move piece
-    if p_message.startswith("move") or p_message.startswith("m "):
+    if (p_message.startswith("move") or p_message.startswith("m ")):
         valid, r_message = validate_user(message)
         return move_piece(r_message,f"{message.guild.id}-{message.channel.id}", p_message) if valid else r_message
     # create new game
@@ -111,9 +111,7 @@ def handle_responces(message, user_message):
         elif os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.temp"):
             return "Looks like someone else has tried to start a game already, you can join their game with `chester join`"
         else:
-            with open(f"games/{message.guild.id}-{message.channel.id}.temp","wb+") as f:
-                f.write(message.author.id.to_bytes(8,"little"))
-            return f"{user_cache[message.author.id]} started a game, player 2 type `chester join` to join the game."
+            return ("create_thread",f"{user_cache[message.author.id]} started a game, player 2 type `chester join` to join the game.")
 
     # join game
     if p_message.startswith("join"):

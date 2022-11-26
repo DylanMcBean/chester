@@ -19,6 +19,14 @@ async def send_message(message, user_message):
                 board_image_file.seek(0)
                 file = disnake.File(board_image_file,filename="image.png")
                 await message.channel.send(response[1],file=file)
+            if response[0] == "create_thread":
+                message = await message.channel.send(response[1])
+                thread = await message.channel.create_thread(name="tester",message=message)
+                with open(f"games/{message.guild.id}-{thread.id}.temp","wb+") as f:
+                    f.write(message.author.id.to_bytes(8,"little"))
+                breakpoint
+            else:
+                await message.channel.send(response)
         else:
             await message.channel.send(response)
     except Exception as e:
@@ -43,6 +51,6 @@ class MyClient(disnake.Client):
 
             await send_message(message, user_message)
 
-client = MyClient(intents=disnake.Intents(messages=True,guilds=True,message_content=True))
+client = MyClient(intents=disnake.Intents(messages=True,guilds=True,message_content=True,))
 with open(".token") as f:
     client.run(f.read())
