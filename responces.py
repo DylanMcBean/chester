@@ -37,7 +37,8 @@ def render_board(board, save_name, move=None):
         pieces_clone = pieces_clone.crop((piece_mappings[draw_piece]*30,0,(piece_mappings[draw_piece]*30)+30,30))
         board_image.paste(pieces_clone,box=((x*40)+(x*2+7),(y*40)+(y*2+7)),mask=pieces_clone.convert("RGBA"))
 
-    board_image.save(f"{save_name}.png")
+    board_image = board_image.resize((760,760), resample=Image.NEAREST)
+    return board_image
 
 def save_game(save_name,user_white,user_black,game_data=None):
     if game_data is None:
@@ -82,10 +83,12 @@ def move_piece(game_data,game_name, p_message):
     save_game(game_data[0], game_data[1], game_data[2], board.fen())
 
     if board.is_checkmate():
+        os.remove(f"games/{game_name}.chess")
         return ("image_msg",f"**CHECKMATE** {user_cache[game_data[4]]} won, well done!!",render_board(board,f"{game_name}",move))
     elif board.is_check():
         return ("image_msg","**CHECK**",render_board(board,f"{game_name}",move))
     elif board.is_stalemate():
+        os.remove(f"games/{game_name}.chess")
         return ("image_msg","**STALEMATE**",render_board(board,f"{game_name}",move))
 
     if test.promotion:
@@ -98,7 +101,7 @@ def handle_responces(message, user_message):
     if message.author.id not in user_cache:
         user_cache[message.author.id] = f"**{message.author.name}**"
     # move piece
-    if p_message.startswith("move"):
+    if p_message.startswith("move") or p_message.startswith("m "):
         valid, r_message = validate_user(message)
         return move_piece(r_message,f"{message.guild.id}-{message.channel.id}", p_message) if valid else r_message
     # create new game
@@ -121,8 +124,7 @@ def handle_responces(message, user_message):
                 user_white_id = int.from_bytes(f.read(8), "little")
                 save_game(f"{message.guild.id}-{message.channel.id}", user_white_id, message.author.id)
             os.remove(f"games/{message.guild.id}-{message.channel.id}.temp")
-            render_board(chess.Board(),f"{message.guild.id}-{message.channel.id}")
-            return ("image_msg",f"{user_cache[user_white_id]} join {user_cache[message.author.id]}s' game. {user_cache[user_white_id]} will go first as lights")
+            return ("image_msg",f"{user_cache[message.author.id]} joined {user_cache[user_white_id]}s' game. {user_cache[user_white_id]} will go first as lights",render_board(chess.Board(),f"{message.guild.id}-{message.channel.id}"))
         else:
             return "doesn't looks like there is any game to join just now, if you want to start a game you can type `chester start`"
 
@@ -142,12 +144,49 @@ def handle_responces(message, user_message):
     # load game
     if p_message.startswith("load"):
         if os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
+            valid, responce = validate_user(message)
+            if not valid:
+                return "you cannot edit someone elses game, that's a bit mean."
+            with open(f"games/{message.guild.id}-{message.channel.id}.chess","rb") as f:
+                user_white = int.from_bytes(f.read(8), "little")
+                user_black = int.from_bytes(f.read(8), "little")
             game_state = p_message.removeprefix("load ")
             board = chess.Board()
             board.set_fen(game_state)
+            save_game(f"{message.guild.id}-{message.channel.id}", user_white, user_black, board.fen())
             return ("image_msg",render_board(board,f"{message.guild.id}-{message.channel.id}"))
         else:
             return "You need to start a game to be able to load a game state"
+
+    # show current game state
+    if p_message.startswith("show"):
+        if os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
+            with open(f"games/{message.guild.id}-{message.channel.id}.chess","rb") as f:
+                user_white = int.from_bytes(f.read(8), "little")
+                user_black = int.from_bytes(f.read(8), "little")
+                game_data = f.read().decode("utf8")
+            board = chess.Board()
+            board.set_fen(game_data)
+            return ("image_msg",f"**Current game state**\n{'**White**' if board.turn else '**Black**'} to move",render_board(board,f"{message.guild.id}-{message.channel.id}"))
+        else:
+            return "You need to start a game to be able to look at it"
+
+    # resign
+    if p_message.startswith("resign"):
+        if os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
+            with open(f"games/{message.guild.id}-{message.channel.id}.chess","rb") as f:
+                user_white = int.from_bytes(f.read(8), "little")
+                user_black = int.from_bytes(f.read(8), "little")
+            valid, responce = validate_user(message)
+            if not valid:
+                return "you cannot resign from a game you're not part of"
+            os.remove(f"games/{message.guild.id}-{message.channel.id}.chess")
+            return f"{user_cache[message.author.id]} resigned, {user_cache[user_white] if message.author.id == user_black else user_cache[user_black]} won!!"
+            return f"{user_cache[message.author.id]} ended the game"
+        elif os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.temp"):
+            return "you cannot resign from nothing"
+        else:
+            return "you cannot resign from nothing"
 
 
     if p_message.startswith("help"):

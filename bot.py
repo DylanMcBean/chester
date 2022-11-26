@@ -1,20 +1,26 @@
 import disnake, responces
+from io import BytesIO
 
 
 async def send_message(message, user_message):
     try:
-        responce = responces.handle_responces(message, user_message)
-        if type(responce) == tuple:
-            if responce[0] == "image":
-                with open(f"{message.guild.id}-{message.channel.id}.png","rb") as f:
-                    picture = disnake.File(f)
-                    await message.channel.send(file=picture)
-            if responce[0] == "image_msg":
-                with open(f"{message.guild.id}-{message.channel.id}.png","rb") as f:
-                    picture = disnake.File(f)
-                    await message.channel.send(responce[1],file=picture)
+
+        response = responces.handle_responces(message, user_message)
+        if type(response) == tuple:
+            if response[0] == "image":
+                board_image_file = BytesIO()
+                response[-1].save(board_image_file,format="PNG")
+                board_image_file.seek(0)
+                file = disnake.File(board_image_file,filename="image.png")
+                await message.channel.send(file=file)
+            if response[0] == "image_msg":
+                board_image_file = BytesIO()
+                response[-1].save(board_image_file,format="PNG")
+                board_image_file.seek(0)
+                file = disnake.File(board_image_file,filename="image.png")
+                await message.channel.send(response[1],file=file)
         else:
-            await message.channel.send(responce)
+            await message.channel.send(response)
     except Exception as e:
         print(f"Error: {e}")
         await message.channel.send(f"Error: {e}")
