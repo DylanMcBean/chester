@@ -6,17 +6,18 @@ async def send_message(message, user_message):
         responce = responces.handle_responces(message, user_message)
         if type(responce) == tuple:
             if responce[0] == "image":
-                with open("holder.png","rb") as f:
+                with open(f"{message.guild.id}-{message.channel.id}.png","rb") as f:
                     picture = disnake.File(f)
                     await message.channel.send(file=picture)
             if responce[0] == "image_msg":
-                with open("holder.png","rb") as f:
+                with open(f"{message.guild.id}-{message.channel.id}.png","rb") as f:
                     picture = disnake.File(f)
                     await message.channel.send(responce[1],file=picture)
         else:
             await message.channel.send(responce)
     except Exception as e:
         print(f"Error: {e}")
+        await message.channel.send(f"Error: {e}")
 
 
 class MyClient(disnake.Client):

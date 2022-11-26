@@ -5,7 +5,7 @@ import chess.pgn
 piece_mappings = {"P":0,"R":1,"N":2,"B":3,"Q":4,"K":5,"p":6,"r":7,"n":8,"b":9,"q":10,"k":11}
 user_cache = {}
 
-def render_board(board, move=None):
+def render_board(board, save_name, move=None):
     board_image = Image.new("RGBA",(380,380),color=(0,0,0,0))
     board_background_image = Image.open("assets/background2.png")
     board_pieces_image = Image.open("assets/Pieces2.png")
@@ -37,7 +37,7 @@ def render_board(board, move=None):
         pieces_clone = pieces_clone.crop((piece_mappings[draw_piece]*30,0,(piece_mappings[draw_piece]*30)+30,30))
         board_image.paste(pieces_clone,box=((x*40)+(x*2+7),(y*40)+(y*2+7)),mask=pieces_clone.convert("RGBA"))
 
-    board_image.save("holder.png")
+    board_image.save(f"{save_name}.png")
 
 def save_game(save_name,user_white,user_black,game_data=None):
     if game_data is None:
@@ -57,7 +57,7 @@ def validate_user(message):
         else:
             return False, "Doesn't look like you are part of this game, you need to wait until this game has finished."
 
-def move_piece(game_data, p_message):
+def move_piece(game_data,game_name, p_message):
     board = chess.Board()
     board.set_fen(game_data[3])
     move = p_message.split(" ")[-1]
@@ -82,16 +82,16 @@ def move_piece(game_data, p_message):
     save_game(game_data[0], game_data[1], game_data[2], board.fen())
 
     if board.is_checkmate():
-        return ("image_msg",f"**CHECKMATE** {user_cache[game_data[4]]} won, well done!!",render_board(board,move))
+        return ("image_msg",f"**CHECKMATE** {user_cache[game_data[4]]} won, well done!!",render_board(board,f"{game_name}",move))
     elif board.is_check():
-        return ("image_msg","**CHECK**",render_board(board,move))
+        return ("image_msg","**CHECK**",render_board(board,f"{game_name}",move))
     elif board.is_stalemate():
-        return ("image_msg","**STALEMATE**",render_board(board,move))
+        return ("image_msg","**STALEMATE**",render_board(board,f"{game_name}",move))
 
     if test.promotion:
-        return ("image_msg","**PROMOTION**", render_board(board,move))
+        return ("image_msg","**PROMOTION**", render_board(board,f"{game_name}",move))
 
-    return ("image",render_board(board,move))
+    return ("image",render_board(board,f"{game_name}",move))
 
 def handle_responces(message, user_message):
     p_message = user_message
@@ -100,7 +100,7 @@ def handle_responces(message, user_message):
     # move piece
     if p_message.startswith("move"):
         valid, r_message = validate_user(message)
-        return move_piece(r_message, p_message) if valid else r_message
+        return move_piece(r_message,f"{message.guild.id}-{message.channel.id}", p_message) if valid else r_message
     # create new game
     if p_message.startswith("start"):
         if os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
@@ -121,7 +121,7 @@ def handle_responces(message, user_message):
                 user_white_id = int.from_bytes(f.read(8), "little")
                 save_game(f"{message.guild.id}-{message.channel.id}", user_white_id, message.author.id)
             os.remove(f"games/{message.guild.id}-{message.channel.id}.temp")
-            render_board(chess.Board())
+            render_board(chess.Board(),f"{message.guild.id}-{message.channel.id}")
             return ("image_msg",f"{user_cache[user_white_id]} join {user_cache[message.author.id]}s' game. {user_cache[user_white_id]} will go first as lights")
         else:
             return "doesn't looks like there is any game to join just now, if you want to start a game you can type `chester start`"
@@ -139,17 +139,28 @@ def handle_responces(message, user_message):
         else:
             return "you cannot end what has not yet begun"
 
+    # load game
+    if p_message.startswith("load"):
+        if os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
+            game_state = p_message.removeprefix("load ")
+            board = chess.Board()
+            board.set_fen(game_state)
+            return ("image_msg",render_board(board,f"{message.guild.id}-{message.channel.id}"))
+        else:
+            return "You need to start a game to be able to load a game state"
+
+
     if p_message.startswith("help"):
         return """
         **CHESTER COMMANDS**
         **help**: Displays this message
-        **move**(algebraic): Used to move a chest piece ie. (move a2a3, move piece from a2 to a3)
+        **move**(algebraic): Used to move a chess piece ie. (move a2a3, move piece from a2 to a3)
             - to promote a piece you use notation like b7a8[piece_type]
                 - q -> Queen
                 - b -> Bishop
                 - n -> Knight
                 - r -> Rook
-        **move**(standard): Used to move a chest piece ie. (move a4, move piece from a2 to a4)
+        **move**(standard): Used to move a chess piece ie. (move a4, move piece from a2 to a4)
             - to promote a piece you use notation like dxc1[piece_type]
                 - Q -> Queen
                 - B -> Bishop
@@ -157,7 +168,8 @@ def handle_responces(message, user_message):
                 - R -> Rook
         **start**: Start a new game
         **join**: Join a game
-        **end**: End a running game"""
+        **end**: End a running game
+        **load**: Load a game state -> `chester load 4r3/1pR4p/pk5N/4p3/P3b3/8/2P5/1K6 b - a3 0 32`"""
 
 
     unknown_command_responce = random.choice(["I'm not sure what you meant sorry", "That command isn't in my database", "You must know something I dont because I've no idea what that means", "Computer says no", "Hmmm???", "Ehm, say what now?", "You know im chester right? I dunno who you are tryna make me do that"])
