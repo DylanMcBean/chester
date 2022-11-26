@@ -15,7 +15,7 @@ def render_board(board, move=None):
     # draw the piece that just moved (darker)
     if move != None:
         moved_from = chess.parse_square(''.join(move[:2])) # get where the piece moved from
-        moved_to = chess.parse_square(''.join(move[2:])) # get the piece type that moved
+        moved_to = chess.parse_square(''.join(move[2:4])) # get the piece type that moved
 
         overlay = Image.new("RGBA",(40,40),color=(235,201,137,200))
         x = moved_from%8 # get pieces x position
@@ -39,50 +39,62 @@ def render_board(board, move=None):
 
     board_image.save("holder.png")
 
-def save_game(guild_id,user_white,user_black,game_data=None):
+def save_game(save_name,user_white,user_black,game_data=None):
     if game_data is None:
         game_data = chess.Board().fen()
-    with open(f"games/{guild_id}.chess","wb+") as f:
+    with open(f"games/{save_name}.chess","wb+") as f:
         f.write(user_white.to_bytes(8,"little") + user_black.to_bytes(8,"little") + bytes(game_data,encoding="utf8"))
 
 def validate_user(message):
-    if not os.path.isfile(f"games/{message.guild.id}.chess"):
+    if not os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
         return False, "Doesn't look like there is a game currently playing in this server, Try `chester help` for a list of commands you can run."
-    with open(f"games/{message.guild.id}.chess","rb") as f:
+    with open(f"games/{message.guild.id}-{message.channel.id}.chess","rb") as f:
         user_white = int.from_bytes(f.read(8), "little")
         user_black = int.from_bytes(f.read(8), "little")
         game_data = f.read().decode("utf8")
         if message.author.id in [user_white, user_black]:
-            return True, [message.guild.id, user_white, user_black, game_data, message.author.id]
+            return True, [f"{message.guild.id}-{message.channel.id}", user_white, user_black, game_data, message.author.id]
         else:
             return False, "Doesn't look like you are part of this game, you need to wait until this game has finished."
 
 def move_piece(game_data, p_message):
     board = chess.Board()
     board.set_fen(game_data[3])
-    move = p_message[-4:]
+    move = p_message.split(" ")[-1]
 
+    try:
+        test = board.parse_san(move)
+    except Exception:
+        test = chess.Move.from_uci(move)
+
+    if test not in board.legal_moves:
+        return "Invalid Move"
+
+    move = str(test)
     # check if color is correct
     colour_moving = board.color_at(chess.parse_square(move[:2]))
 
-    if not (colour_moving and game_data[1] == game_data[4]):
+    if colour_moving != (game_data[1] == game_data[4]):
         return "You cannot move a piece of the opposite colour"
 
-    test = chess.Move.from_uci(move)
-    if test not in board.legal_moves:
-        return "Invalid Move"
+
     board.push_uci(move)
     save_game(game_data[0], game_data[1], game_data[2], board.fen())
-    
-    if board.is_check():
-        ("image_msg","**CHECK**",render_board(board,move))
-    elif board.is_checkmate():
-        ("image_msg","**CHECKMATE**",render_board(board,move))
+
+    if board.is_checkmate():
+        return ("image_msg",f"**CHECKMATE** {user_cache[game_data[4]]} won, well done!!",render_board(board,move))
+    elif board.is_check():
+        return ("image_msg","**CHECK**",render_board(board,move))
+    elif board.is_stalemate():
+        return ("image_msg","**STALEMATE**",render_board(board,move))
+
+    if test.promotion:
+        return ("image_msg","**PROMOTION**", render_board(board,move))
 
     return ("image",render_board(board,move))
 
 def handle_responces(message, user_message):
-    p_message = user_message.lower()
+    p_message = user_message
     if message.author.id not in user_cache:
         user_cache[message.author.id] = f"**{message.author.name}**"
     # move piece
@@ -91,24 +103,24 @@ def handle_responces(message, user_message):
         return move_piece(r_message, p_message) if valid else r_message
     # create new game
     if p_message.startswith("start"):
-        if os.path.isfile(f"games/{message.guild.id}.chess"):
+        if os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
             return "Looks like there is a game currently being played, please wait :)"
-        elif os.path.isfile(f"games/{message.guild.id}.temp"):
+        elif os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.temp"):
             return "Looks like someone else has tried to start a game already, you can join their game with `chester join`"
         else:
-            with open(f"games/{message.guild.id}.temp","wb+") as f:
+            with open(f"games/{message.guild.id}-{message.channel.id}.temp","wb+") as f:
                 f.write(message.author.id.to_bytes(8,"little"))
             return f"{user_cache[message.author.id]} started a game, player 2 type `chester join` to join the game."
 
     # join game
     if p_message.startswith("join"):
-        if os.path.isfile(f"games/{message.guild.id}.chess"):
+        if os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
             return "Looks like there is a game currently being played, please wait :)"
-        elif os.path.isfile(f"games/{message.guild.id}.temp"):
-            with open(f"games/{message.guild.id}.temp","rb") as f:
+        elif os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.temp"):
+            with open(f"games/{message.guild.id}-{message.channel.id}.temp","rb") as f:
                 user_white_id = int.from_bytes(f.read(8), "little")
-                save_game(message.guild.id, user_white_id, message.author.id)
-            os.remove(f"games/{message.guild.id}.temp")
+                save_game(f"{message.guild.id}-{message.channel.id}", user_white_id, message.author.id)
+            os.remove(f"games/{message.guild.id}-{message.channel.id}.temp")
             render_board(chess.Board())
             return ("image_msg",f"{user_cache[user_white_id]} join {user_cache[message.author.id]}s' game. {user_cache[user_white_id]} will go first as lights")
         else:
@@ -116,19 +128,36 @@ def handle_responces(message, user_message):
 
     # delete game
     if p_message.startswith("end"):
-        if os.path.isfile(f"games/{message.guild.id}.chess"):
+        if os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.chess"):
             valid, responce = validate_user(message)
             if not valid:
-                return responce
-            os.remove(f"games/{message.guild.id}.chess")
+                return "you cannot end someone elses game, that's a bit mean."
+            os.remove(f"games/{message.guild.id}-{message.channel.id}.chess")
             return f"{user_cache[message.author.id]} ended the game"
-        elif os.path.isfile(f"games/{message.guild.id}.temp"):
+        elif os.path.isfile(f"games/{message.guild.id}-{message.channel.id}.temp"):
             return "you cannot end what has not yet begun"
         else:
-            return "you cannot end someone elses game, that's a bit mean."
+            return "you cannot end what has not yet begun"
 
     if p_message.startswith("help"):
-        return "**CHESTER COMMANDS**\n**help**: Displays this message\n**move**: Used to move a chest piece ie. (move a2a3, move piece from a2 to a3)\n**start**: Start a new game\n**join**: Join a game\n**end**: End a running game"
+        return """
+        **CHESTER COMMANDS**
+        **help**: Displays this message
+        **move**(algebraic): Used to move a chest piece ie. (move a2a3, move piece from a2 to a3)
+            - to promote a piece you use notation like b7a8[piece_type]
+                - q -> Queen
+                - b -> Bishop
+                - n -> Knight
+                - r -> Rook
+        **move**(standard): Used to move a chest piece ie. (move a4, move piece from a2 to a4)
+            - to promote a piece you use notation like dxc1[piece_type]
+                - Q -> Queen
+                - B -> Bishop
+                - N -> Knight
+                - R -> Rook
+        **start**: Start a new game
+        **join**: Join a game
+        **end**: End a running game"""
 
 
     unknown_command_responce = random.choice(["I'm not sure what you meant sorry", "That command isn't in my database", "You must know something I dont because I've no idea what that means", "Computer says no", "Hmmm???", "Ehm, say what now?", "You know im chester right? I dunno who you are tryna make me do that"])

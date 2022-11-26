@@ -27,7 +27,7 @@ class MyClient(disnake.Client):
             if message.author == client.user:
                 return # make sure bot cannot communicate with itsself
         
-            user_message = str(message.content).lower()
+            user_message = str(message.content)
 
             if user_message.startswith("chester"):
                 user_message = user_message[8:]
